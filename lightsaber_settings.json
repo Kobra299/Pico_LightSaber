@@ -1,0 +1,51 @@
+{
+    "Settings": {
+        "BladeColor": "Blue",
+        "SoundEffect": "Standard"
+    },
+    "Colors": {
+        "Red": "255, 0, 0",
+        "Blue": "0, 0, 255",
+        "Green": "0, 255, 0",
+        "Yellow": "255, 255, 0",
+        "White": "255, 255, 255"
+    },
+    "NeoPixel": {
+        "NumPixels": 30,
+        "NeoPixelPin": "GP10"
+    },
+    "Sounds": {
+        "Standard": "standard.wav",
+        "Vader": {
+            "Sound1": "Vader/sound1.wav",
+            "Sound2": "Vader/sound2.wav",
+            "Sound3": "Vader/sound3.wav",
+            // Add all 88 sound variations here
+        },
+        "Luke": "luke.wav",
+        "Custom": "custom.wav",
+        "SoundEffect1": "sound1.wav",
+        "SoundEffect2": "sound2.wav",
+        "SoundEffect3": "sound3.wav"
+    }
+}
+
+
+
+###########################################
+
+
+# Read JSON configuration for settings and sound effects
+with open("lightsaber_config.json", "r") as config_file:
+    config_data = ujson.load(config_file)
+
+settings = config_data["settings"]
+sound_effects = config_data["sound_effects"]
+color_mappings = config_data["color_mappings"]
+
+# ...
+
+# Example: Set NeoPixels based on the "Blade Color" setting
+blade_color = settings["Blade Color"]
+if blade_color in color_mappings:
+    set_neopixel_color(color_mappings[blade_color])
