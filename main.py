@@ -1,4 +1,4 @@
-import ujson
+import json
 import os
 import wave
 import neopixel
@@ -6,37 +6,27 @@ import urandom
 import board
 import time
 import machine
-# import Adafruit_Python_CharLCD as LCD #Need to find right library
+import asyncio
+import ssd1306  # Import the SSD1306 library
 
-# Initialize GPIO
-GPIO.setmode(GPIO.BCM)
-
-# Define GPIO pins for buttons, speaker, and neopixels
+# Define GPIO pins for buttons, speaker, neopixels, and OLED
 button1_pin = 9
 button2_pin = 34
-speaker_pin = 11
-neo_pixel_pin = board.GP10
+button3_pin = 14  # Power button pin for turning the lightsaber on/off
+SDA_PIN = 4
+SCL_PIN = 5
 
-# Initialize buttons and speaker
-GPIO.setup(button1_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-GPIO.setup(button2_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+# Initialize OLED display
+i2c = machine.I2C(0, sda=machine.Pin(SDA_PIN), scl=machine.Pin(SCL_PIN))
+oled = ssd1306.SSD1306_I2C(128, 64, i2c)  # Adjust dimensions as required
 
-# Initialize speaker
-pwm_speaker = PWM(Pin(speaker_pin))
-pwm_speaker.duty_u16(0)
+# Function to load settings from a file
+def load_settings(file_path):
+    with open(file_path, "r") as settings_file:
+        settings = json.load(settings_file)
+    return settings
 
-# Initialize LCD display
-lcd = LCD.Adafruit_CharLCDPlate()
-
-
-# Load settings from lightsaber_settings.json
-with open("lightsaber_settings.json", "r") as settings_file:
-    settings = ujson.load(settings_file)
-
-# Define the path to the sounds directory
-sounds_directory = "sounds"
-
-# Function to load sound configurations from a folder
+# Function to load sound configurations
 def load_sound_configs(directory):
     sound_configs = {}
     for root, dirs, files in os.walk(directory):
@@ -44,69 +34,74 @@ def load_sound_configs(directory):
             config_file_path = os.path.join(root, dir_name, "config.json")
             if os.path.exists(config_file_path):
                 with open(config_file_path, "r") as sound_config_file:
-                    sound_configs[dir_name] = ujson.load(sound_config_file)
+                    sound_configs[dir_name] = json.load(sound_config_file)
     return sound_configs
 
-# Load sound configurations for different sound folders
+# Load settings from a file
+settings = load_settings("lightsaber_settings.json")
+
+# Load sound configurations from a folder
+sounds_directory = "Sounds"
 sound_configs = load_sound_configs(sounds_directory)
 
-# Initialize and configure the accelerometer
-# (Make sure to add accelerometer initialization code here)
+# Function to update the OLED display
+def update_oled_display(text):
+    oled.fill(0)
+    oled.text(text, 0, 0)
+    oled.show()
 
-# Initialize and configure NeoPixels
-num_pixels = settings["NeoPixel"]["NumPixels"]
-neo_pixel_pin = board.GP10
-pixels = neopixel.NeoPixel(neo_pixel_pin, num_pixels)
+lightsaber_on = False
+settings_mode = False
 
-# Define a list of movement thresholds for different effects
-movement_thresholds = {
-    "Swing": 2.0,
-    "Hit": 3.0,
-    # Add more movement types and thresholds as needed
-}
+button1_press_start = 0
+button2_press_start = 0
+button3_press_start = 0
 
-# Define the event loop
-loop = asyncio.get_event_loop()
+def button_pressed_for_duration(start_time, duration):
+    return time.ticks_ms() - start_time >= duration
 
-# Function to detect and respond to movements
-async def detect_movements():
-    while True:
-        # Read accelerometer data
-        # (Add accelerometer data reading code here)
-
-        for movement, threshold in movement_thresholds.items():
-            if accelerometer_data['x'] > threshold:
-                # A swing movement is detected
-                play_random_sound_effect(sound_effects[movement])
-            elif accelerometer_data['y'] > threshold:
-                # A hit movement is detected
-                play_random_sound_effect(sound_effects[movement])
-            # Add more movement detection logic as needed
-
-        await asyncio.sleep(0.1)
-
-# Create a task to detect movements asynchronously
-loop.create_task(detect_movements())
-
-# Main loop for settings management, button actions, and NeoPixel updates
 while True:
+    # Check power button state
+    if machine.Pin(button3_pin).value() == 0:
+        if lightsaber_on:
+            lightsaber_on = False
+            # Implement the turn off logic
+            update_oled_display("Lightsaber Off")
+        else:
+            lightsaber_on = True
+            # Implement the turn on logic
+            update_oled_display("Lightsaber On")
+
     # Check button 1 state
-    if machine.Pin(9).value() == 0:  # Replace with the actual GPIO pin for button 1
-        # Button 1 is pressed, perform action
-        button1_pressed(None)
+    if machine.Pin(button1_pin).value() == 0:
+        button1_press_start = time.ticks_ms()
+
+    if machine.Pin(button1_pin).value() == 1:
+        button1_press_duration = time.ticks_ms() - button1_press_start
+
+        if button1_press_duration >= 3000:
+            settings_mode = True
+            # Add your settings mode code here
+            # Example: update_oled_display("Settings Mode")
+        else:
+            # Handle normal lightsaber functionality for button 1
+            pass  # Add your logic here
 
     # Check button 2 state
-    if machine.Pin(34).value() == 0:  # Replace with the actual GPIO pin for button 2
-        # Button 2 is pressed, perform action
-        button2_pressed(None)
+    if machine.Pin(button2_pin).value() == 0:
+        button2_press_start = time.ticks_ms()
 
-    # Example: Set NeoPixels based on the "Blade Color" setting
-    blade_color = settings["Settings"]["BladeColor"]
-    color_mappings = settings["Colors"]
-    if blade_color in color_mappings:
-        set_neopixel_color([int(x) for x in color_mappings[blade_color].split(",")])
+    if machine.Pin(button2_pin).value() == 1:
+        button2_press_duration = time.ticks_ms() - button2_press_start
 
-    await asyncio.sleep(0.1)  # Add a small delay to avoid rapid loop iterations
+        if settings_mode:
+            # Inside settings mode
+            # Your code to cycle through settings here
+            # Example: update_oled_display("Cycling through settings")
 
-# Run the event loop
-loop.run_forever()
+            if button_pressed_for_duration(button2_press_start, 3000):
+                # Save the selected settings
+                settings_mode = False  # Exit settings mode
+                # Example: update_oled_display("Settings Saved")
+
+    await asyncio.sleep(0.1)
